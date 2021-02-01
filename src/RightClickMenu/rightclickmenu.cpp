@@ -19,6 +19,8 @@
 #include "rightclickmenu.h"
 #include "src/UtilityFunction/utility.h"
 #include <QDebug>
+#include <QMessageBox>
+#include <QKeyEvent>
 
 RightClickMenu::RightClickMenu(QWidget *parent):
     QWidget(parent)
@@ -147,7 +149,8 @@ void RightClickMenu::addToDesktopActionTriggerSlot()
 
 void RightClickMenu::uninstallActionTriggerSlot()
 {
-    QString cmd=QString("dpkg -S "+m_desktopfp);
+    //on openEuler or fedora
+    QString cmd=QString("rpm -qf "+m_desktopfp);
     m_cmdProc->setReadChannel(QProcess::StandardOutput);
     m_cmdProc->start("sh",QStringList()<<"-c"<<cmd);
     m_cmdProc->waitForFinished();
@@ -161,10 +164,34 @@ void RightClickMenu::onReadOutput()
     QString packagestr=QString::fromLocal8Bit(m_cmdProc->readAllStandardOutput().data());
     QString packageName=packagestr.split(":").at(0);
 //    qDebug()<<packagestr<<packageName;
-    char command[100];
-    sprintf(command,"kylin-uninstaller %s %s",packageName.toLocal8Bit().data(),m_desktopfp.toLocal8Bit().data());
-//    sprintf(command,"kylin-installer -remove %s",packageName.toLocal8Bit().data());
-    QProcess::startDetached(command);
+
+    packageName = packageName.trimmed();
+    QProcess tempProcess;
+    QString cmd = QString("pkexec rpm -e %1").arg(packageName);
+    tempProcess.start(cmd);
+    tempProcess.waitForFinished();
+
+    QString errorInfo1 = tempProcess.readAllStandardError().data();
+    QString result1 = tempProcess.readAllStandardOutput().data();
+    //check uninstall
+    cmd = QString("rpm -qa");
+    tempProcess.start(cmd);
+    tempProcess.waitForFinished();
+
+    QString errorInfo2 = tempProcess.readAllStandardError().data();
+    QString result2 = tempProcess.readAllStandardOutput().data();
+    bool bFail = false;
+    bFail= result2.contains(packageName);
+
+    if(!bFail)
+    {
+        QMessageBox::information(this,tr("infomation"),tr("Uninstall finished!"));
+    }
+    else  {
+        QMessageBox::information(this,tr("error"), errorInfo1);
+    }
+    QKeyEvent event(QEvent::KeyPress, Qt::Key_Menu,Qt::NoModifier);
+    QCoreApplication::sendEvent(this->parent(),&event);
 }
 
 void RightClickMenu::attributeActionTriggerSlot()
